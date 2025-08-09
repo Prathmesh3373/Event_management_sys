@@ -1,0 +1,68 @@
+task :
+
+To develope an Event management system where users can create , register for and manage events. User can view event details , register for events and track their event participation. Admin can create ,update and delete events as well as view all registrations and manage event details.
+
+
+
+Tech stack:
+
+frontend: HTML , CSS , JS
+
+backend: Nodejs with express.js
+
+database:Postgresql
+
+
+
+MInimum requiremets:
+
+1.User Authentication
+
+a. User must be able to register ,log in and securely access event info
+
+b. authentication should include password hashing and session management.
+
+2.User functions:
+
+a. Brows Events: Users can brows available events ,including details such as data time location and description
+
+b. Register for events: User can register for an event by clicking a "Register" button , with automatic updates to either event list.
+
+c. view registered events :
+
+Users can view list of events they have registered for , including event details and status.
+
+d. Cancel registration: Users can cancel their registration for an event before the event date.
+
+
+
+3. Admin functions:
+
+a. Admin can create new events , providing details such as event name , description , date , time and location .
+
+b. admins can update event details and delete events >
+
+c. admins can view and manage registrations for each event, including a list of registered users and total number of participants .
+
+
+
+4.UI/UX:
+
+a. clear ,simple for MVP and easy to navigate interface for browsing, registering for and managing events.
+
+b. admin interface should be simple for creating and managing events .
+
+
+
+Bonus:
+
+1. Authentication: Implement secure user login and registration or both event participants and admins.
+
+2. Event categories: allow events to be categorized and filterabl by category
+
+3. Event reminders : send automated reminders to registered users before the event (via email or online screen notifications)
+
+4. Event Capacity: track and display how many people have registered and how many slots are left
+
+
+
