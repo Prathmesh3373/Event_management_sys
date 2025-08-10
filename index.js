@@ -5,11 +5,18 @@ import cors from 'cors';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import ejs from 'ejs';
+
+
+
+
 
 const app = express();
 const PORT = 3000;
 dotenv.config();
-
+// console.log( process.env.JWT_SECRET);
+ 
+app.set('view engine', 'ejs');
 const db = new pg.Pool({
     password: process.env.my_PASSWORD,
     user: process.env.my_USER,
@@ -17,10 +24,11 @@ const db = new pg.Pool({
     database: process.env.my_DATABASE,
     port: process.env.my_PORT,
 });
+// db.connect();
 
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'] ;
-    console.log(authHeader);
+    // console.log(authHeader); 
     const token = authHeader.split(' ')[1]; 
     if (!token) return res.sendStatus(401);
     jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
@@ -30,49 +38,63 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
+const isadmin = (req , res , next) =>{
+    if(!req.user.isadmin){
+        return res.status(403).json({ error: 'Access denied' });
+    }
+    next();
+};
+
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-express.static('public');
+app.use(express.static('public'));
 app.use(cors());
 // authentication functions
-app.post('/api/register', async (req, res) => {
-    const { username, password, isadmin } = req.body;
-    const hashedPassword = await bcrypt.hash(password, 10);
+app.post('/register', async (req, res) => {
+    const { username, password, is_admin = false } = req.body;
     try {
-        const result = await db.query('INSERT INTO users (username, password,isadmin) VALUES ($1, $2) RETURNING id', [username, hashedPassword,isadmin]);
-        res.status(201).json({ userId: result.rows[0].id });
+        // Hash the password for security
+        const hashedPassword = await bcrypt.hash(password, 10);
+        // Insert user with corrected column names
+        const result = await db.query(
+            'INSERT INTO users (username, password_hash, is_admin) VALUES ($1, $2, $3) RETURNING id',
+            [username, hashedPassword, is_admin]
+        );
+        res.status(201).json({ userId: result.rows[0].id, message: 'User registered successfully' });
     } catch (error) {
-        res.status(500).json({ error: 'Database error' });
+        console.error('Registration error:', error);
+        res.status(500).json({ error: 'Username already exists or a database error occurred.' });
     }
-}
-);
+});
 
-app.post('/api/login',async (req, res) => {
-    const {username,password,isadmin} = req.body;
-    try{
-        const result = await db.query('select * from users where username  = $1',[username]);
-        if(result.rows.length > 0){
-            const user = result.rows[0];            
-            const isMatch = await bcrypt.compare(password, user.password);
-            if(isMatch){
-                const token = jwt.sign({userId: user.id, isadmin: user.isadmin}, process.env.JWT_SECRET, {expiresIn: '1h'});
-                res.status(200).json({token});
+app.post('/login', async (req, res) => {
+    const { username, password } = req.body;
+    try {
+        const result = await db.query('SELECT * FROM users WHERE username = $1', [username]);
+        if (result.rows.length > 0) {
+            const user = result.rows[0];
+            // Compare the provided password with the hashed password from the correct column
+            const isMatch = await bcrypt.compare(password, user.password_hash);
+            if (isMatch) {
+                // Generate a JWT with the correct user data
+                const token = jwt.sign({ id: user.id, username: user.username, is_admin: user.is_admin }, process.env.JWT_SECRET, { expiresIn: '1h' });
+                res.status(200).json({ token });
             } else {
-                res.status(401).json({error: 'Invalid credentials'});
+                res.status(401).json({ error: 'Invalid credentials' });
             }
         } else {
-            res.status(404).json({error: 'User not found'});
+            res.status(404).json({ error: 'User not found' });
         }
-    }
-    catch(error){
-        res.status(500).json({error: 'Database error'});
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ error: 'Database error' });
     }
 });
 
 // user functions 
 
 //showing the user all events 
-app.get('/api/all-events', async (req, res) => {
+app.get('/all-events', async (req, res) => {
     try {
         const result = await db.query('SELECT * FROM events');
         if (result.rows.length === 0) {
@@ -85,7 +107,7 @@ app.get('/api/all-events', async (req, res) => {
 });
 
 // for users who are selecting filter option for location and date
-app.get('api/events/filter', async (req, res) => {
+app.get('/events/filter',authenticateToken ,async (req, res) => {
     const {location, date, typeof_event} = req.query;
     try{
         if(location && !date && !typeof_event) {
@@ -123,7 +145,7 @@ app.get('api/events/filter', async (req, res) => {
 });
 
 //cancel event registration
-app.delete('/api/cancel-registration', async (req, res) => {
+app.delete('/cancel-registration',authenticateToken, async (req, res) => {
     const { eventId } = req.query;
     const userId = req.user.id; // Assuming user ID is available in the request
     try {
@@ -138,7 +160,7 @@ app.delete('/api/cancel-registration', async (req, res) => {
 });
 
 //register for an event
-app.post('/api/register-event', authenticateToken, async (req, res) => {
+app.post('/register-event', authenticateToken, async (req, res) => {
     const { eventId } = req.body;
     const userId = req.user.userId; // Assuming user ID is available in the request
     try {
@@ -150,7 +172,7 @@ app.post('/api/register-event', authenticateToken, async (req, res) => {
 });
 
 //get all registrations for a user
-app.get('/api/user-registrations', authenticateToken, async (req, res) =>{
+app.get('/user-registrations', authenticateToken, async (req, res) =>{
     const userId = req.user.userId; // Assuming user ID is available in the request
     try {
         const result = await db.query('SELECT * FROM registrations WHERE user_id = $1', [userId]);
@@ -165,20 +187,22 @@ app.get('/api/user-registrations', authenticateToken, async (req, res) =>{
 });
 
 // for the admin to create an event
-app.post('/api/create-event', authenticateToken, async (req, res) => {
-    if (!req.user.isadmin) {
-        return res.status(403).json({ error: 'Access denied' });
-    }
-    const { name, date, location,type } = req.body;
+app.post('/create-event', authenticateToken, isadmin, async (req, res) => {
+    const { name, date, location, description, time, capacity } = req.body;
     try {
-        const result = await db.query('INSERT INTO events (name, date, location, description) VALUES ($1, $2, $3, $4, $5) RETURNING *', [name, date, location, description]);
-        res.status(201).json({ event: result.rows[0] });
+        // Corrected query with all parameters
+        const result = await db.query(
+            'INSERT INTO events (name, date, location, description, time, capacity) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [name, date, location, description, time, capacity]
+        );
+        res.status(201).json({ event: result.rows[0], message: 'Event created successfully' });
     } catch (error) {
+        console.error('Create event error:', error);
         res.status(500).json({ error: 'Database error' });
     }
 });
 // for the admin to update an event
-app.put('/api/update-event/:id', authenticateToken, async (req, res) => {
+app.put('/update-event/:id', authenticateToken, isadmin, async (req, res) => {
     if (!req.user.isadmin) {
         return res.status(403).json({ error: 'Access denied' });
     }
@@ -196,7 +220,7 @@ app.put('/api/update-event/:id', authenticateToken, async (req, res) => {
 });
 
 // for the admin to delete an event
-app.delete('/api/delete-event/:id', authenticateToken, async (req, res) =>{
+app.delete('/delete-event/:id', authenticateToken,isadmin, async (req, res) =>{
     const eventId = req.params.id;
     if (!req.user.isadmin) {
         return res.status(403).json({ error: 'Access denied' });
@@ -213,7 +237,7 @@ app.delete('/api/delete-event/:id', authenticateToken, async (req, res) =>{
 } );
 
 // for the admin to view all registrations
-app.get('/api/admin/registrations', authenticateToken, async (req, res) => {
+app.get('/admin/registrations', authenticateToken,isadmin, async (req, res) => {
     if(!req.user.isadmin){
         return res.status(403).json({ error: 'Access denied' });
     }

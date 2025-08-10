@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Management System</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="container nav-container">
+            <div class="logo">Eventify</div>
+            <div id="nav-links" class="nav-links">
+                <a href="#" onclick="showSection('login-section')">Login</a>
+                <a href="#" onclick="showSection('register-section')">Register</a>
+                <a href="#" onclick="showSection('events-section')">Browse Events</a>
+                <a href="#" onclick="showSection('my-events-section')" class="hidden">My Events</a>
+                <a href="#" onclick="showSection('admin-section')" class="hidden">Admin Dashboard</a>
+                <a href="#" onclick="logout()" class="hidden logout" id="logout-button">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container main-content">
+
+        <!-- Login Section -->
+        <section id="login-section" class="card">
+            <h2>Login</h2>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="login-username">Username</label>
+                    <input type="text" id="login-username" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" name="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Login</button>
+                <p id="login-message" class="message error"></p>
+            </form>
+        </section>
+
+        <!-- Register Section -->
+        <section id="register-section" class="card hidden">
+            <h2>Register</h2>
+            <form id="register-form">
+                <div class="form-group">
+                    <label for="register-username">Username</label>
+                    <input type="text" id="register-username" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="register-password">Password</label>
+                    <input type="password" id="register-password" name="password" required>
+                </div>
+                <div class="form-group form-inline">
+                    <input type="checkbox" id="register-admin" name="is_admin">
+                    <label for="register-admin">Register as Admin</label>
+                </div>
+                <button type="submit" class="btn btn-primary">Register</button>
+                <p id="register-message" class="message error"></p>
+            </form>
+        </section>
+
+        <!-- Events Section -->
+        <section id="events-section" class="card hidden">
+            <h2>Available Events</h2>
+            <div id="events-list" class="grid"></div>
+            <p id="events-message" class="message error"></p>
+        </section>
+
+        <!-- My Events Section -->
+        <section id="my-events-section" class="card hidden">
+            <h2>My Registered Events</h2>
+            <div id="my-events-list" class="grid"></div>
+            <p id="my-events-message" class="message error"></p>
+        </section>
+
+        <!-- Admin Section -->
+        <section id="admin-section" class="card hidden">
+            <h2>Admin Dashboard</h2>
+
+            <!-- Event Creation Form -->
+            <div class="sub-card">
+                <h3>Create New Event</h3>
+                <form id="create-event-form">
+                    <input type="text" id="event-name" name="name" placeholder="Event Name" required>
+                    <textarea id="event-description" name="type" placeholder="type" rows="4" required></textarea>
+                    <input type="date" id="event-date" name="date" required>
+                    <input type="time" id="event-time" name="time" required>
+                    <input type="text" id="event-location" name="location" placeholder="Location" required>
+                    <input type="number" id="event-capacity" name="capacity" placeholder="Capacity (optional)">
+                    <button type="submit" class="btn btn-success">Create Event</button>
+                    <p id="create-event-message" class="message error"></p>
+                </form>
+            </div>
+
+            <!-- Manage Events and Registrations -->
+            <div id="admin-events-list">
+                <h3>Manage Events</h3>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>&copy; 2023 Eventify. All rights reserved.</p>
+    </footer>
+    <script>
+        const API_BASE_URL = 'http://localhost:3000';
+        let currentUser = null;
+
+        // --- UI Helper Functions ---
+
+        /**
+         * Toggles the visibility of different sections based on the provided section ID.
+         * @param {string} sectionId The ID of the section to show.
+         */
+        function showSection(sectionId) {
+            // Hide all sections first
+            const sections = document.querySelectorAll('section');
+            sections.forEach(section => {
+                section.classList.add('hidden');
+            });
+            // Show the requested section
+            document.getElementById(sectionId).classList.remove('hidden');
+
+            // Fetch data relevant to the new section
+            if (sectionId === 'events-section') {
+                fetchEvents();
+            } else if (sectionId === 'my-events-section') {
+                fetchMyEvents();
+            } else if (sectionId === 'admin-section') {
+                fetchAdminEvents();
+            }
+        }
+
+        /**
+         * Updates the navigation links based on the user's login and admin status.
+         */
+        function updateNav() {
+            const token = localStorage.getItem('token');
+            const myEventsLink = document.querySelector('a[onclick*="my-events-section"]');
+            const adminLink = document.querySelector('a[onclick*="admin-section"]');
+            const authLinks = document.querySelectorAll('a[onclick*="login-section"], a[onclick*="register-section"]');
+            const logoutButton = document.getElementById('logout-button');
+
+            if (token) {
+                // Logged in state: Show user-specific links, hide auth links
+                authLinks.forEach(link => link.classList.add('hidden'));
+                myEventsLink.classList.remove('hidden');
+                logoutButton.classList.remove('hidden');
+
+                // Check for admin role
+                if (currentUser && currentUser.isadmin) {
+                    adminLink.classList.remove('hidden');
+                } else {
+                    adminLink.classList.add('hidden');
+                }
+            } else {
+                // Logged out state: Hide user-specific links, show auth links
+                authLinks.forEach(link => link.classList.remove('hidden'));
+                myEventsLink.classList.add('hidden');
+                adminLink.classList.add('hidden');
+                logoutButton.classList.add('hidden');
+            }
+        }
+
+        /**
+         * Logs the user out by clearing local storage and updating the UI.
+         */
+        function logout() {
+            localStorage.removeItem('token');
+            currentUser = null;
+            updateNav();
+            showSection('login-section');
+        }
+
+        /**
+         * Renders an event card HTML string.
+         * @param {object} event The event data object.
+         * @param {boolean} showCancelButton Whether to show the cancel button.
+         * @param {boolean} showAdminButtons Whether to show admin buttons (edit/delete).
+         * @returns {string} The HTML string for the event card.
+         */
+        function renderEventCard(event, showCancelButton = false, showAdminButtons = false) {
+            const formattedDate = new Date(event.date).toLocaleDateString();
+            return `
+        <div class="event-card">
+            <h3>${event.name}</h3>
+            <p>${event.description}</p>
+            <ul>
+                <li><strong>Date:</strong> ${formattedDate}</li>
+                <li><strong>Time:</strong> ${event.time}</li>
+                <li><strong>Location:</strong> ${event.location}</li>
+            </ul>
+            <div class="card-actions">
+                ${showCancelButton ? `
+                    <button class="btn btn-primary" onclick="cancelRegistration('${event.id}')">Cancel Registration</button>
+                ` : !showAdminButtons ? `
+                    <button class="btn btn-primary" onclick="registerForEvent('${event.id}')">Register</button>
+                ` : ''}
+                ${showAdminButtons ? `
+                    <button class="btn btn-info" onclick="viewRegistrations('${event.id}', '${event.name}')">View Registrations</button>
+                    <button class="btn btn-primary" onclick="openEditModal('${event.id}')">Edit</button>
+                    <button class="btn btn-danger" onclick="deleteEvent('${event.id}')">Delete</button>
+                ` : ''}
+            </div>
+        </div>
+    `;
+        }
+
+        // --- Data Fetching and Handling ---
+
+        async function fetchEvents() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/all-events`);
+                if (!response.ok) throw new Error('Failed to fetch events');
+                const events = await response.json();
+                const eventList = document.getElementById('events-list');
+                eventList.innerHTML = ''; // Clear previous events
+                events.forEach(event => {
+                    eventList.innerHTML += renderEventCard(event);
+                });
+            } catch (error) {
+                document.getElementById('events-message').textContent = error.message;
+            }
+        }
+
+        async function fetchMyEvents() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                showSection('login-section');
+                return;
+            }
+            try {
+                const response = await fetch(`${API_BASE_URL}/user-registrations`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) throw new Error('Failed to fetch my events');
+                const myEvents = await response.json();
+                const myEventsList = document.getElementById('my-events-list');
+                myEventsList.innerHTML = ''; // Clear previous events
+                myEvents.forEach(event => {
+                    myEventsList.innerHTML += renderEventCard(event, true); // The 'true' shows the cancel button
+                });
+            } catch (error) {
+                document.getElementById('my-events-message').textContent = error.message;
+            }
+        }
+
+        async function fetchAdminEvents() {
+            const token = localStorage.getItem('token');
+            if (!token || !currentUser || !currentUser.isadmin) {
+                showSection('login-section');
+                return;
+            }
+            try {
+                const response = await fetch(`${API_BASE_URL}/all-events`);
+                if (!response.ok) throw new Error('Failed to fetch events');
+                const adminEvents = await response.json();
+                const adminEventCards = document.getElementById('admin-events-list');
+                adminEventCards.innerHTML = ''; // Clear previous events
+                adminEvents.forEach(event => {
+                    adminEventCards.innerHTML += renderEventCard(event, false, true); // The 'true' shows admin buttons
+                });
+            } catch (error) {
+                document.getElementById('admin-events-message').textContent = error.message;
+            }
+        }
+
+        async function registerForEvent(eventId) {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                alert('Please log in to register for an event.');
+                showSection('login-section');
+                return;
+            }
+            try {
+                const response = await fetch(`${API_BASE_URL}/register-event`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ eventId })
+                });
+                if (!response.ok) throw new Error('Registration failed. You may have already registered.');
+
+                alert('Registration successful!');
+                fetchEvents(); // Refresh event list
+                fetchMyEvents(); // Refresh user's events
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        async function cancelRegistration(eventId) {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                alert('Please log in to cancel a registration.');
+                showSection('login-section');
+                return;
+            }
+            if (confirm('Are you sure you want to cancel your registration?')) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/cancel-registration?eventId=${eventId}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (!response.ok) throw new Error('Cancellation failed.');
+
+                    alert('Registration cancelled successfully.');
+                    fetchMyEvents();
+                } catch (error) {
+                    alert(error.message);
+                }
+            }
+        }
+
+        async function deleteEvent(eventId) {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            if (confirm('Are you sure you want to delete this event?')) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/delete-event/${eventId}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (!response.ok) throw new Error('Failed to delete event');
+                    alert('Event deleted.');
+                    fetchAdminEvents();
+                    fetchEvents();
+                } catch (error) {
+                    alert(error.message);
+                }
+            }
+        }
+
+        async function viewRegistrations(eventId, eventName) {
+            const token = localStorage.getItem('token');
+            if (!token || !currentUser || !currentUser.isadmin) return;
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/registrations/${eventId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) throw new Error('Failed to fetch registrations');
+                const registrations = await response.json();
+
+                let registrationMessage = registrations.length > 0 ?
+                    `Total: ${registrations.length}\n\n` + registrations.map(reg => `- ${reg.username}`).join('\n') :
+                    'No registrations yet.';
+
+                alert(`Registrations for "${eventName}":\n\n${registrationMessage}`);
+            } catch (error) {
+                alert('Failed to view registrations.');
+            }
+        }
+
+        function openEditModal(eventId) {
+            alert(`Editing event with ID: ${eventId}. You would implement a modal here to update the event details.`);
+        }
+
+        // --- Event Listeners and Initial Load ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check for a token on load to maintain login state
+            const token = localStorage.getItem('token');
+            if (token) {
+                try {
+                    // Decode the token payload to get user info without server call
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    currentUser = payload;
+                    updateNav();
+                    showSection('events-section');
+                } catch (e) {
+                    // Token is invalid, log out
+                    logout();
+                }
+            } else {
+                // No token, show the login page
+                showSection('login-section');
+            }
+
+            // Set up form submission listeners
+            document.getElementById('login-form').addEventListener('submit', handleLogin);
+            document.getElementById('register-form').addEventListener('submit', handleRegister);
+            document.getElementById('create-event-form').addEventListener('submit', handleCreateEvent);
+        });
+
+        // Authentication handlers
+        async function handleLogin(event) {
+            event.preventDefault();
+            const username = event.target.username.value;
+            const password = event.target.password.value;
+            try {
+                const response = await fetch(`${API_BASE_URL}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    localStorage.setItem('token', data.token);
+                    const payload = JSON.parse(atob(data.token.split('.')[1]));
+                    currentUser = payload;
+                    updateNav();
+                    showSection('events-section');
+                    document.getElementById('login-message').textContent = '';
+                } else {
+                    document.getElementById('login-message').textContent = data.error;
+                }
+            } catch (error) {
+                document.getElementById('login-message').textContent = 'An error occurred during login.';
+            }
+        }
+
+        async function handleRegister(event) {
+            event.preventDefault();
+            const username = event.target.username.value;
+            const password = event.target.password.value;
+            const isadmin = event.target.is_admin.checked;
+             // Changed to match the new input name
+             console.log(`Registering user: ${username}, Admin: ${isadmin}`);
+            try {
+                const response = await fetch(`${API_BASE_URL}/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, isadmin })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    alert('Registration successful! Please log in.');
+                    showSection('login-section');
+                    event.target.reset();
+                    document.getElementById('register-message').textContent = '';
+                } else {
+                    document.getElementById('register-message').textContent = data.error;
+                }
+            } catch (error) {
+                document.getElementById('register-message').textContent = 'An error occurred during registration.';
+            }
+        }
+
+        async function handleCreateEvent(event) {
+            event.preventDefault();
+            const token = localStorage.getItem('token');
+            if (!token || !currentUser || !currentUser.isadmin) {
+                alert('You must be an admin to create an event.');
+                showSection('login-section');
+                return;
+            }
+            const formData = new FormData(event.target);
+            const eventData = Object.fromEntries(formData.entries());
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/create-event`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(eventData)
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById('create-event-message').textContent = 'Event created successfully!';
+                    event.target.reset();
+                    fetchAdminEvents();
+                    fetchEvents();
+                } else {
+                    document.getElementById('create-event-message').textContent = data.error;
+                }
+            } catch (error) {
+                document.getElementById('create-event-message').textContent = 'Failed to create event.';
+            }
+        }
+
+    </script>
+
+</body>
+
+
+</html>
