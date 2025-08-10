@@ -14,7 +14,7 @@ import ejs from 'ejs';
 const app = express();
 const PORT = 3000;
 dotenv.config();
-// console.log( process.env.JWT_SECRET);
+
  
 app.set('view engine', 'ejs');
 const db = new pg.Pool({
@@ -250,6 +250,7 @@ app.get('/admin/registrations', authenticateToken,isadmin, async (req, res) => {
     }
     catch(error){
         res.status(500).json({ error: 'Database error' });
+     
     }
 });
 
